@@ -1,0 +1,161 @@
+"""evolver.py: a simple Python interface to Ken Brakke's surface evolver REPL.
+# Notes
+The procedures here could be generalized to allow interaction with any 
+command-line REPL interface.
+"""
+
+import subprocess
+import multiprocessing
+import select
+import fcntl, os
+
+import logging
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
+logger.propagate = False
+debug = False 
+
+def _non_block_read(output):
+    """Non-blocking read from a file-like object."""
+    #logger.debug('Executing a non-blocking read.')
+    fd = output.fileno()
+    fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+    fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+    return output.read() or ''
+
+class Evolver(object):
+    """Represents an evolver instance."""
+ 
+    def _get_response(self, delimeter):
+        """Returns evolver's output up to a delimeter string.
+        
+        Output is whitespace-stripped.
+        """
+        output = ''
+        while True:
+            # Wait for output.
+            stdout, _, _ = select.select([self.evolver.stdout], [], [], 1)
+            new = _non_block_read(self.evolver.stdout)
+            #logger.debug('Got output: <%s>', new)
+            output += new
+            end = output.find(delimeter)
+            if end >= 0:
+                if debug:
+                    logger.debug('Delimeter present. Stopping.')
+                return (output[:end]).strip()  # Exclude last line.
+
+    def run_command(self, command, delimeter="Enter command:"):
+        """Returns whitespace-stripped output for `command` up to `delimeter`.
+        """
+        if debug:
+            logger.debug('Running command <%s> with delimeter <%s>', 
+                     command, delimeter)
+        # (\n executes command)
+        self.evolver.stdin.write(command + '\n')
+        self.evolver.stdin.flush()
+        response = self._get_response(delimeter)
+        if debug:
+            #logger.debug('Response: <%s>', response)
+            return response
+        return response
+       
+    def __init__(self, executable='evolver'):
+        # We use subprocess.PIPE so this process can interact with evolver's
+        # stdin/out/err streams.
+        if debug:
+            logger.debug('Opening an instance of evolver.')
+        self.evolver = subprocess.Popen('/cygdrive/c/Evolver/evolver.exe', 
+                                        stdin=subprocess.PIPE, 
+                                        stdout=subprocess.PIPE, 
+                                        stderr=subprocess.PIPE)
+
+#self.evolver = subprocess.Popen([executable], 
+#                                        stdin=subprocess.PIPE, 
+#                                        stdout=subprocess.PIPE, 
+#                                        stderr=subprocess.PIPE)
+
+
+        if debug:
+            logger.debug('Waiting for initialization.')  #--log=INFO  put in evolver not python
+        self.working_file = False
+        check = self._get_response('Enter new datafile name '  
+                                   '(none to continue, q to quit):')
+        check = self.run_command('')
+        if check:
+            self.evolver.terminate()
+            raise Exception('Initialization failed. Output was <{}>'
+                            .format(check))
+
+        if debug:
+            logger.debug('Initialized.')
+
+    def close_file(self):
+        self.run_command('q', delimeter='Enter new datafile name '
+                         '(none to continue, q to quit):') 
+        self.run_command('')
+        print '\nClosed File: ' + self.working_file
+        self.working_file = False
+
+    def dump(self):
+        self.run_command('dump')         
+
+    def evolve(self, repeats=1, to_print=False):
+        """Evolves a specified number of times and returns the values of
+        area, energy, and scale
+        """
+        command = 'g ' 
+        output = self.run_command(command)
+        split_output = output.split()
+        if not split_output:
+            output = self._get_response(delimeter='Enter command:')
+            split_output = output.split()
+        values = list()
+        for i in range(3):
+            values.append(i)
+        values[0] = split_output[2]   #repeats = 10, 7 words are output in surface evolver, -1 accounts for the zero index and every second character is a number 
+        values[1] = split_output[4]
+        getValue = values[1]
+        values[2] = split_output[6]
+        print output + '\n'
+        if to_print:
+            print output + '\n'
+        return getValue
+# Surface Evolver Output: 1. Length 3333 Energy: 4444 Scale: 5555
+
+    def open_file(self, data_file):    
+        if self.working_file: 
+            raise Exception('A file is already open!')
+        if debug:
+            logger.debug('Opening file <%s>', data_file)
+        self.run_command('q', delimeter='Enter new datafile name '
+                                        '(none to continue, q to quit):')
+        logger.debug('Entered file-open dialog')
+        #self.run_command(data_file, delimeter='Enter command: //End Of Input\nEnter command: ')
+        self.run_command(data_file, delimeter='//End of Input')
+        self.working_file = data_file
+        print 'Opened file: ' + data_file + '\n'
+
+    def refine(self, repeats='1'):
+        """refines a specified number of times"""
+        command = 'rz ' + str(repeats)
+        return self.run_command(command)     
+
+    def fun(self, repeats='1'):
+        """exectues the fun procedure a specified number of times"""
+        command = 'fun ' + str(repeats)
+        return self.run_command(command)        
+
+    def vertex_averaging(self, repeats='1'):
+        """Averages vertices a specified number of times"""
+        command = 'V '+ str(repeats)
+        return self.run_command(command)    
+     
+    def __enter__(self):
+        """Enables 'with' statement."""
+        return self
+
+    def __exit__(self, *args):
+        """Always stop evolver when the user is finished."""
+        self.evolver.terminate() 
+        logger.debug('evolver closed.')
