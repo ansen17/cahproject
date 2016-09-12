@@ -1,8 +1,20 @@
-Determining Contact Angle Hysteresis on Sinusoidal Patterned Surfaces
+Determining Contact Angle Hysteresis on Sinusoidal Physically Patterned Surfaces
 ==============
 
 Summary of the Project
 --------------
+
+I completed a computational modeling project for my undergraduate honors thesis project. I focused on determining a thermodynamic model for droplets
+on sinusoidal physically patterned surfaces. I used Python scripts to help obtain relevant data about the droplets in conjunction with a C-based 
+program called *Surface Evolver*. I developed an droplet evolution algorithm and various phase diagrams to show how energy related to the droplet 
+behavior. Below is a broad description of what I did. 
+
+I have hosted most of the core files relevant in obtaining the final result between energy and contact angle hysteresis (a physical parameter). Other 
+files not included consisted largely of automation and data retrieval Python scripts.
+
+Please let me know if you have any questions and thank you for checking my page.
+
+
 
 Background of Wetting
 
